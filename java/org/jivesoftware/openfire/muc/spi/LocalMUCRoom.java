@@ -650,7 +650,7 @@ public class LocalMUCRoom implements MUCRoom {
         }
         // If the room has just been created send the "room locked until configuration is
         // confirmed" message
-        if (isLocked()) {
+        if (!isRoomNew && isLocked()) {
             // http://xmpp.org/extensions/xep-0045.html#enter-locked
             Presence presenceItemNotFound = new Presence(Presence.Type.error);
             presenceItemNotFound.setError(PacketError.Condition.item_not_found);
@@ -1117,7 +1117,7 @@ public class LocalMUCRoom implements MUCRoom {
             if (occupant.getPresence().getFrom().equals(presence.getTo())) {
                 Presence selfPresence = presence.createCopy();
                 Element fragSelfPresence = selfPresence.getChildElement("x", "http://jabber.org/protocol/muc#user");
-                fragSelfPresence.addElement("status", "110");
+                fragSelfPresence.addElement("status").addAttribute("code", "110");
 
                 // Only in the context of entering the room status code 100, 201 and 210 should be sent.
                 // http://xmpp.org/registrar/mucstatus.html
@@ -2088,7 +2088,7 @@ public class LocalMUCRoom implements MUCRoom {
      */
     private void kickPresence(Presence kickPresence, JID actorJID) {
         // Get the role(s) to kick
-        List<MUCRole> occupants = occupantsByNickname.get(kickPresence.getFrom().getResource().toLowerCase());
+        List<MUCRole> occupants = new ArrayList<MUCRole>(occupantsByNickname.get(kickPresence.getFrom().getResource().toLowerCase()));
         for (MUCRole kickedRole : occupants) {
             kickPresence = kickPresence.createCopy();
             // Add the actor's JID that kicked this user from the room

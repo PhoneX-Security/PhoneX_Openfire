@@ -24,8 +24,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -272,38 +270,32 @@ public class LocalOutgoingServerSession extends LocalSession implements Outgoing
         List<DNSUtil.HostAddress> hosts = DNSUtil.resolveXMPPDomain(hostname, port);
         for (Iterator<DNSUtil.HostAddress> it = hosts.iterator(); it.hasNext();) {
             try {
+                socket = new Socket();
                 DNSUtil.HostAddress address = it.next();
                 realHostname = address.getHost();
                 realPort = address.getPort();
                 Log.debug("LocalOutgoingServerSession: OS - Trying to connect to " + hostname + ":" + port +
                         "(DNS lookup: " + realHostname + ":" + realPort + ")");
                 // Establish a TCP connection to the Receiving Server
-                socket = new Socket();
-                socket.connect(new InetSocketAddress(realHostname, realPort), RemoteServerManager.getSocketTimeout());
+                socket.connect(new InetSocketAddress(realHostname, realPort),
+                        RemoteServerManager.getSocketTimeout());
                 Log.debug("LocalOutgoingServerSession: OS - Plain connection to " + hostname + ":" + port + " successful");
                 break;
             }
-            catch (UnknownHostException uhe) {
-            	Log.warn("Unknown host: " + realHostname);
-            } 
-            catch (SocketTimeoutException ste) {
-            	Log.error("Connection Timed out trying to connect to remote server: " + hostname +
-            			"(DNS lookup: " + realHostname + ":" + realPort + ")");
-            }
             catch (Exception e) {
                 Log.warn("Error trying to connect to remote server: " + hostname +
-                        "(DNS lookup: " + realHostname + ":" + realPort + ")", e);
+                        "(DNS lookup: " + realHostname + ":" + realPort + "): " + e.toString());
                 try {
                     if (socket != null) {
                         socket.close();
                     }
                 }
                 catch (IOException ex) {
-                    Log.debug("Additional exception while trying to close socket when connection to remote server failed.", ex);
+                    Log.debug("Additional exception while trying to close socket when connection to remote server failed: " + ex.toString());
                 }
             }
         }
-        if (socket == null || !socket.isConnected()) {
+        if (!socket.isConnected()) {
             return null;
         }
 
@@ -382,27 +374,32 @@ public class LocalOutgoingServerSession extends LocalSession implements Outgoing
                     Log.debug("LocalOutgoingServerSession: OS - Error, <starttls> was not received");
                 }
             }
+            // Something went wrong so close the connection and try server dialback over
+            // a plain connection
+            if (connection != null) {
+                connection.close();
+            }
         }
         catch (SSLHandshakeException e) {
-            Log.debug("LocalOutgoingServerSession: SSL Handshake error while creating secured outgoing session to remote " +
-                    "server: " + hostname + "(DNS lookup: " + realHostname + ":" + realPort + "): " + e.getMessage());
+            Log.debug("LocalOutgoingServerSession: Handshake error while creating secured outgoing session to remote " +
+                    "server: " + hostname + "(DNS lookup: " + realHostname + ":" + realPort +
+                    "):" + e.toString());
+            // Close the connection
+            if (connection != null) {
+                connection.close();
+            }
         }
         catch (XmlPullParserException e) {
             Log.warn("Error creating secured outgoing session to remote server: " + hostname +
-                    "(DNS lookup: " + realHostname + ":" + realPort + "): ", e);
-        }
-        catch (UnknownHostException uhe) {
-        	Log.warn("Unknown host: " + realHostname);
-        } 
-        catch (SocketTimeoutException ste) {
-        	Log.error("Connection Timed out trying to connect to remote server: " + hostname +
-        			"(DNS lookup: " + realHostname + ":" + realPort + ")");
+                    "(DNS lookup: " + realHostname + ":" + realPort + "): " + e.toString());
+            // Close the connection
+            if (connection != null) {
+                connection.close();
+            }
         }
         catch (Exception e) {
-			  Log.error("Error creating secured outgoing session to remote server: " + hostname +
-	                    "(DNS lookup: " + realHostname + ":" + realPort + ")", e);
-		} 
-        finally {
+            Log.error("Error creating secured outgoing session to remote server: " + hostname +
+                    "(DNS lookup: " + realHostname + ":" + realPort + "): " + e.toString());
             // Close the connection
             if (connection != null) {
                 connection.close();
@@ -711,7 +708,7 @@ public class LocalOutgoingServerSession extends LocalSession implements Outgoing
             }
         }
         catch (Exception e) {
-            Log.warn("Error returning error to sender. Original packet: " + packet, e);
+            Log.error("Error returning error to sender. Original packet: " + packet, e);
         }
     }
 
