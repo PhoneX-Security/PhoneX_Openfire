@@ -336,6 +336,13 @@ public class PresenceManagerImpl extends BasicModule implements PresenceManager,
     public void probePresence(JID prober, JID probee) {
         try {
             if (server.isLocal(probee)) {
+                boolean canProbe = false;
+                try {
+                    canProbe = canProbePresence(prober, probee.getNode());
+                } catch(UserNotFoundException ex){
+                    
+                }
+                
                 // Local probers should receive presences of probee in all connected resources
                 Collection<JID> proberFullJIDs = new ArrayList<JID>();
                 if (prober.getResource() == null && server.isLocal(prober)) {
@@ -374,6 +381,10 @@ public class PresenceManagerImpl extends BasicModule implements PresenceManager,
                                 presencePacket.setTo(receipient);
                                 if (list == null || !list.shouldBlockPacket(presencePacket)) {
                                     // Send the presence to the prober
+                                    if (!canProbe){
+                                        Log.info(String.format("We should not be doing this; prober=%s, probee=%s, plist=%s can=%s packet=%s", prober, probee, list, canProbe, presencePacket));
+                                        continue;
+                                    }
                                     deliverer.deliver(presencePacket);
                                 }
                             }
@@ -402,6 +413,12 @@ public class PresenceManagerImpl extends BasicModule implements PresenceManager,
                                     continue;
                                 }
                             }
+                            
+                            if (!canProbe){
+                                Log.info(String.format("We should not be doing this; prober=%s, probee=%s, plist=%s can=%s packet=%s", prober, probee, list, canProbe, presencePacket));
+                                continue;
+                            }
+                            
                             try {
                                 deliverer.deliver(presencePacket);
                             }
